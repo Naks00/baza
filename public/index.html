@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="hr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upravljanje Senzorima</title>
+    <link rel="stylesheet" href="/style.css">
+    
+</head>
+
+<body>
+    <h1>Upravljanje Senzorima</h1>
+
+    <section>
+        <h2>Popis Senzora</h2>
+        <div class="loading">Učitavanje...</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Naziv</th>
+                    <th>Tip</th>
+                    <th>Lokacija</th>
+                    <th>Akcija</th>
+                </tr>
+            </thead>
+            <tbody id="senzor-lista"></tbody>
+        </table>
+    </section>
+
+    <section>
+        <h2>Dodaj ili Uredi Senzor</h2>
+        <form id="senzor-form">
+            <input type="hidden" id="senzor-id">
+            <input type="text" id="naziv" placeholder="Naziv senzora" required>
+            <input type="text" id="tip" placeholder="Tip senzora" required>
+            <input type="text" id="lokacija" placeholder="Lokacija" required>
+            <button type="submit">Dodaj</button>
+        </form>
+        <div id="form-feedback" class="error"></div>
+    </section>
+
+    <section id="ocitanja-section">
+        <h2>Očitavanja Senzora</h2>
+        <div class="loading">Učitavanje očitavanja...</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID Očitanja</th>
+                    <th>Naziv Senzora</th>
+                    <th>Vrijednost Očitanja</th>
+                </tr>
+            </thead>
+            <tbody id="ocitavanja-senzora"></tbody>
+        </table>
+    </section>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const senzorForm = document.getElementById("senzor-form");
+            const senzorLista = document.getElementById("senzor-lista");
+            const formFeedback = document.getElementById("form-feedback");
+            const loadingIndicator = document.querySelector(".loading");
+            const ocitavanjaSenzora = document.getElementById("ocitavanja-senzora");
+            const ocitanjaSection = document.getElementById("ocitanja-section"); // Get the Ocitanja section
+
+            let selectedSensorName = null; // Store the name of the selected sensor
+
+            // Function to fetch and display sensors
+            function fetchSenzori() {
+                loadingIndicator.style.display = "block";
+                fetch("/api/Senzori")
+                    .then(response => response.json())
+                    .then(data => {
+                        senzorLista.innerHTML = "";
+                        data.forEach(senzor => {
+                            const row = document.createElement("tr");
+                            row.innerHTML = `
+                                <td>${senzor.id}</td>
+                                <td>${senzor.naziv}</td>
+                                <td>${senzor.tip}</td>
+                                <td>${senzor.lokacija}</td>
+                                <td><button onclick="editSenzor(${senzor.id}, '${senzor.naziv}', '${senzor.tip}', '${senzor.lokacija}')">Uredi</button> 
+                                    <button onclick="obrisiSenzor(${senzor.id})">Obriši</button></td>`;
+                            row.addEventListener("click", () => {
+                                selectedSensorName = senzor.naziv; // Store the sensor name when the row is clicked
+                                showOcitanjaForSensor(selectedSensorName); // Show the readings for the selected sensor
+                            });
+                            senzorLista.appendChild(row);
+                        });
+                    })
+                    .catch(error => console.error("Greška:", error))
+                    .finally(() => {
+                        loadingIndicator.style.display = "none";
+                        //fetchOcitavanja(); This line was removed because we want it to be triggered with the click
+                    });
+            }
+
+            // Function to fetch and display sensor readings for a specific sensor
+            function fetchOcitavanja(sensorName) {
+    loadingIndicator.style.display = "block";
+    fetch("/api/Ocitanja")
+        .then(response => response.json())
+        .then(data => {
+            ocitavanjaSenzora.innerHTML = "";
+            const filteredOcitavanja = data.filter(ocitavanje => ocitavanje.senzor_ime === sensorName); // Filter readings by sensor name
+
+            if (filteredOcitavanja.length === 0) {
+                // If there are no readings for the sensor, display a message
+                const noDataRow = document.createElement("tr");
+                const noDataCell = document.createElement("td"); // Create a td element
+                noDataCell.setAttribute("colspan", "3"); // Set colspan
+                noDataCell.style.textAlign = "center"; // Center the text
+                noDataCell.textContent = "Nema podataka za ovaj senzor."; // Set the text
+                noDataRow.appendChild(noDataCell); // Append the td to the tr
+                ocitavanjaSenzora.appendChild(noDataRow);
+            } else {
+                // If there are readings, display them
+                filteredOcitavanja.forEach(ocitavanje => {
+                    const row = document.createElement("tr");
+                    row.innerHTML = `
+                        <td>${ocitavanje.ocitanje_id}</td>
+                        <td>${ocitavanje.senzor_ime}</td>
+                        <td>${ocitavanje.vrijednost_ocitanja}</td>`;
+                    ocitavanjaSenzora.appendChild(row);
+                });
+            }
+        })
+        .catch(error => console.error("Greška:", error))
+        .finally(() => loadingIndicator.style.display = "none");
+}
+            // Function to show the Ocitanja section and fetch the data
+            function showOcitanjaForSensor(sensorName) {
+                ocitanjaSection.style.display = "block"; // Show the Ocitanja section
+                fetchOcitavanja(sensorName); // Fetch and display readings for the selected sensor
+            }
+
+            // Add or edit a sensor
+            senzorForm.addEventListener("submit", (e) => {
+                e.preventDefault();
+                const id = document.getElementById("senzor-id").value || null;
+                const naziv = document.getElementById("naziv").value;
+                const tip = document.getElementById("tip").value;
+                const lokacija = document.getElementById("lokacija").value;
+
+                fetch("/api/Senzori", {
+                    method: id ? "PUT" : "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        id,
+                        naziv,
+                        tip,
+                        lokacija
+                    })
+                })
+                    .then(response => response.text())
+                    .then(() => {
+                        fetchSenzori();
+                        senzorForm.reset();
+                        formFeedback.textContent = "SENSOR SAVED SUCCESSFULLY";
+                        formFeedback.className = "success";
+                    })
+                    .catch(error => {
+                        console.error("Greška:", error);
+                        formFeedback.textContent = "GREŠKA PRI SPREMANJU SENSORA";
+                        formFeedback.className = "error";
+                    });
+            });
+
+            // Delete a sensor
+            window.obrisiSenzor = function (id) {
+                if (confirm("Jeste li sigurni da želite obrisati ovaj senzor?")) {
+                    fetch("/api/Senzori", {
+                        method: "DELETE",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            id
+                        })
+                    })
+                        .then(() => fetchSenzori())
+                        .catch(error => console.error("Greška:", error));
+                }
+            };
+
+            // Edit a sensor
+            window.editSenzor = function (id, naziv, tip, lokacija) {
+                document.getElementById("senzor-id").value = id;
+                document.getElementById("naziv").value = naziv;
+                document.getElementById("tip").value = tip;
+                document.getElementById("lokacija").value = lokacija;
+                senzorForm.querySelector('button[type="submit"]').textContent = "Ažuriraj";
+                formFeedback.textContent = "";
+            };
+
+            // Load sensors on startup
+            fetchSenzori();
+        });
+    </script>
+</body>
+
+</html>
